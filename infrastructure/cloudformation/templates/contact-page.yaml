@@ -18,6 +18,11 @@ Parameters:
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: List of subnet IDs where Lambda function will run
+    
+  DeploymentBucket:
+    Type: String
+    Default: ''
+    Description: Name of the deployment bucket created by GitHub action
   
 
 
@@ -303,16 +308,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # S3 Bucket for Deployment Artifacts
-  DeploymentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      AccessControl: Private
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+# DeploymentBucket is now a parameter, not a resource
 
   # Bucket Policies
   WebsiteBucketPolicy:
