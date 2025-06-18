@@ -12,7 +12,7 @@ Parameters:
     Description: The deployment environment
   
   VpcId:
-    Type: AWS::EC2::VPC::Id
+    Type: String
     Default: vpc-03de7ad5a4c7c1822
     Description: ID of the existing company VPC
   
@@ -27,7 +27,7 @@ Parameters:
     Description: S3 bucket containing nested stack templates
 
 Conditions:
-  HasVpcConfig: !Not [!Or [!Equals [!Ref VpcId, ''], !Equals [!Ref SubnetIds, '']]]
+  HasVpcConfig: !Not [!Equals [!Ref VpcId, '']]
 
 Resources:
   # Security Groups Stack - Only created if VPC ID is provided
