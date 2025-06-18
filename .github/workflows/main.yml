@@ -82,7 +82,7 @@ jobs:
         run: |
           cd src/lambda/contact-processor
           pip install -r requirements.txt -t .
-          zip -r contact-processor.zip lambda_function.py *.dist-info
+          zip -r contact-processor.zip index.py *.dist-info
           aws s3 cp contact-processor.zip s3://${{ env.DEPLOYMENT_BUCKET }}/${{ env.ENVIRONMENT }}/lambda/
           cd ../../../
 
