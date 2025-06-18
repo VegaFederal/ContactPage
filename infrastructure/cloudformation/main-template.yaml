@@ -23,6 +23,7 @@ Parameters:
     
   RouteTableId:
     Type: String
+    Default: rtb-0bbaaa9146c12d706
     Description: ID of the route table for the VPC endpoint
 
   
