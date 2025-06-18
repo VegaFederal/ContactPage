@@ -19,6 +19,10 @@ Parameters:
     Type: List<AWS::EC2::Subnet::Id>
     Description: List of subnet IDs where Lambda function will run
     
+  RouteTableId:
+    Type: String
+    Description: ID of the route table for the VPC endpoint
+    
   DeploymentBucket:
     Type: String
     Default: ''
@@ -136,6 +140,23 @@ Resources:
           Value: !Sub ${AWS::StackName}-lambda-sg
         - Key: Environment
           Value: !Ref Environment
+          
+  # VPC Endpoint for DynamoDB
+  DynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 'dynamodb:*'
+            Resource: '*'
+      RouteTableIds:
+        - !Ref RouteTableId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcId: !Ref VpcId
 
   # API Gateway for Lambda Integration
   ContactApi:

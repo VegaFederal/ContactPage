@@ -2,11 +2,24 @@ import json
 import os
 import uuid
 import boto3
+import logging
+import time
 from datetime import datetime
+from botocore.config import Config
+
+# Set up logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Configure boto3 with longer timeouts and more retries for VPC environment
+boto_config = Config(
+    connect_timeout=10,
+    read_timeout=10,
+    retries={'max_attempts': 4})
 
 # Initialize AWS clients
-dynamodb = boto3.resource('dynamodb')
-s3 = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb', config=boto_config)
+s3 = boto3.client('s3', config=boto_config)
 
 # Environment variables (set in CloudFormation)
 CONTACTS_TABLE = os.environ['CONTACTS_TABLE']
@@ -14,12 +27,17 @@ RESUME_BUCKET = os.environ['RESUME_BUCKET']
 CLOUDFRONT_DOMAIN = os.environ['CLOUDFRONT_DOMAIN']
 
 def get_upload_url_handler(event):
+    """Get's a resume (or any file) from the web page and stores it in S3."""
+    logger.info(f"Processing upload URL request: {json.dumps(event)}")
     try:
         body = json.loads(event['body'])
         file_name = body.get('fileName')
         file_type = body.get('fileType')
         
+        logger.info(f"File details - Name: {file_name}, Type: {file_type}")
+        
         if not file_name or not file_type:
+            logger.warning("Missing required fields: fileName or fileType")
             return {
                 'statusCode': 400,
                 'headers': {
@@ -29,10 +47,9 @@ def get_upload_url_handler(event):
                 'body': json.dumps({'error': 'fileName and fileType are required'})
             }
         
-        # Generate a unique file key
         file_key = f"resumes/{str(uuid.uuid4())}-{file_name}"
+        logger.info(f"Generated file key: {file_key}")
         
-        # Generate pre-signed URL for S3 upload
         presigned_url = s3.generate_presigned_url(
             'put_object',
             Params={
@@ -40,11 +57,11 @@ def get_upload_url_handler(event):
                 'Key': file_key,
                 'ContentType': file_type
             },
-            ExpiresIn=300  # URL expires in 5 minutes
+            ExpiresIn=300
         )
         
-        # Generate the CloudFront URL for the file
         file_url = f"https://{CLOUDFRONT_DOMAIN}/{file_key}"
+        logger.info(f"Generated CloudFront URL: {file_url}")
         
         return {
             'statusCode': 200,
@@ -58,7 +75,7 @@ def get_upload_url_handler(event):
             })
         }
     except Exception as e:
-        print(f"Error generating pre-signed URL: {str(e)}")
+        logger.error(f"Error generating pre-signed URL: {str(e)}", exc_info=True)
         return {
             'statusCode': 500,
             'headers': {
@@ -69,11 +86,17 @@ def get_upload_url_handler(event):
         }
 
 def submit_contact_handler(event):
+    """Get the contact information out of the event and store it in the dynamoDB table."""
+    logger.info(f"Processing contact submission: {json.dumps(event)}")
     try:
+        # Log environment variables
+        logger.info(f"CONTACTS_TABLE: {CONTACTS_TABLE}")
+        logger.info(f"AWS_REGION: {os.environ.get('AWS_REGION', 'not set')}")
+        
         contact = json.loads(event['body'])
         
-        # Validate required fields
         if not contact.get('firstName') or not contact.get('lastName') or not contact.get('email'):
+            logger.warning("Missing required contact fields")
             return {
                 'statusCode': 400,
                 'headers': {
@@ -83,10 +106,8 @@ def submit_contact_handler(event):
                 'body': json.dumps({'error': 'First name, last name, and email are required'})
             }
         
-        # Create item for DynamoDB
-        table = dynamodb.Table(CONTACTS_TABLE)
+        # Create contact item
         contact_id = str(uuid.uuid4())
-        
         contact_item = {
             'id': contact_id,
             'firstName': contact['firstName'],
@@ -97,8 +118,41 @@ def submit_contact_handler(event):
             'createdAt': datetime.now().isoformat()
         }
         
-        # Save to DynamoDB
-        table.put_item(Item=contact_item)
+        # Get table reference with timing
+        start_time = time.time()
+        logger.info("Getting DynamoDB table reference")
+        table = dynamodb.Table(CONTACTS_TABLE)
+        logger.info(f"Got table reference in {time.time() - start_time:.2f}s")
+        
+        # Try using the low-level client instead if the resource API is timing out
+        try:
+            logger.info(f"Saving contact to DynamoDB: {json.dumps(contact_item)}")
+            start_time = time.time()
+            
+            # First try with resource API
+            try:
+                response = table.put_item(Item=contact_item)
+                logger.info(f"DynamoDB put_item response: {json.dumps(response)}")
+                logger.info(f"Contact saved successfully in {time.time() - start_time:.2f}s")
+            except Exception as resource_error:
+                # If resource API fails, try with client API
+                logger.warning(f"Resource API failed: {str(resource_error)}, trying client API")
+                client = boto3.client('dynamodb', config=boto_config)
+                
+                # Convert to DynamoDB format
+                from boto3.dynamodb.types import TypeSerializer
+                serializer = TypeSerializer()
+                db_item = {k: serializer.serialize(v) for k, v in contact_item.items()}
+                
+                response = client.put_item(
+                    TableName=CONTACTS_TABLE,
+                    Item=db_item
+                )
+                logger.info(f"DynamoDB client put_item response: {json.dumps(response)}")
+                logger.info(f"Contact saved with client API in {time.time() - start_time:.2f}s")
+        except Exception as db_error:
+            logger.error(f"Error in DynamoDB operations: {str(db_error)}", exc_info=True)
+            raise
         
         return {
             'statusCode': 200,
@@ -112,17 +166,48 @@ def submit_contact_handler(event):
             })
         }
     except Exception as e:
-        print(f"Error saving contact: {str(e)}")
+        logger.error(f"Error saving contact: {str(e)}", exc_info=True)
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps({'error': 'Failed to save contact information'})
+            'body': json.dumps({'error': f'Failed to save contact information: {str(e)}'})
         }
 
+def check_network_connectivity():
+    """Check network connectivity to AWS services."""
+    try:
+        # Check if we can reach the DynamoDB endpoint
+        client = boto3.client('dynamodb', config=boto_config)
+        response = client.list_tables(Limit=1)
+        logger.info(f"DynamoDB connectivity check successful: {json.dumps(response)}")
+        return True
+    except Exception as e:
+        logger.error(f"DynamoDB connectivity check failed: {str(e)}", exc_info=True)
+        return False
+
 def lambda_handler(event, context):
+    """Lambda handler receives the request from the html page and process the request."""
+    logger.info(f"Received event: {json.dumps(event)}")
+    
+    # Log Lambda context information
+    logger.info(f"Function name: {context.function_name}")
+    logger.info(f"Remaining time: {context.get_remaining_time_in_millis()}ms")
+    
+    # Check VPC configuration
+    try:
+        import socket
+        # Try to resolve dynamodb endpoint
+        socket.gethostbyname('dynamodb.us-east-1.amazonaws.com')
+        logger.info("DNS resolution for DynamoDB endpoint successful")
+    except Exception as e:
+        logger.error(f"DNS resolution failed: {str(e)}", exc_info=True)
+    
+    # Check network connectivity
+    check_network_connectivity()
+    
     path = event.get('path', '')
     
     if path == '/api/get-upload-url':
@@ -130,6 +215,7 @@ def lambda_handler(event, context):
     elif path == '/api/submit-contact':
         return submit_contact_handler(event)
     else:
+        logger.warning(f"Invalid path requested: {path}")
         return {
             'statusCode': 404,
             'headers': {
