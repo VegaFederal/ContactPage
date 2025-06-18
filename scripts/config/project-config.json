@@ -1,0 +1,6 @@
+{
+  "projectName": "contact-page",
+  "vpcId": "vpc-12345",
+  "subnetIds": "subnet-12345,subnet-67890",
+  "region": "us-east-1"
+}

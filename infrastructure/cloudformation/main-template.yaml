@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Main CloudFormation template that orchestrates nested stacks for a web application
+Description: Main CloudFormation template that orchestrates nested stacks for a contact page application
 
 Parameters:
   Environment:
@@ -18,6 +18,10 @@ Parameters:
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: List of existing subnet IDs for deployment (minimum 2 recommended)
+  
+  TemplateBucket:
+    Type: String
+    Description: S3 bucket containing nested stack templates
 
 Resources:
   # Security Groups Stack
@@ -32,11 +36,11 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # S3 and CloudFront Stack
-  StaticWebsiteStack:
+  # Contact Page Stack
+  ContactPageStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub https://s3.${AWS::Region}.amazonaws.com/${TemplateBucket}/templates/static-website.yaml
+      TemplateURL: !Sub https://s3.${AWS::Region}.amazonaws.com/${TemplateBucket}/templates/contact-page.yaml
       Parameters:
         Environment: !Ref Environment
       Tags:
@@ -64,15 +68,39 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-WebServerSecurityGroupId
 
+  ContactsTableName:
+    Description: DynamoDB table for contact information
+    Value: !GetAtt ContactPageStack.Outputs.ContactsTableName
+    Export:
+      Name: !Sub ${AWS::StackName}-ContactsTableName
+
+  ResumeBucketName:
+    Description: S3 bucket for resume storage
+    Value: !GetAtt ContactPageStack.Outputs.ResumeBucketName
+    Export:
+      Name: !Sub ${AWS::StackName}-ResumeBucketName
+
   WebsiteBucketName:
-    Description: S3 Bucket for website content
-    Value: !GetAtt StaticWebsiteStack.Outputs.WebsiteBucketName
+    Description: S3 bucket for website content
+    Value: !GetAtt ContactPageStack.Outputs.WebsiteBucketName
     Export:
       Name: !Sub ${AWS::StackName}-WebsiteBucketName
 
+  DeploymentBucketName:
+    Description: S3 bucket for deployment artifacts
+    Value: !GetAtt ContactPageStack.Outputs.DeploymentBucketName
+    Export:
+      Name: !Sub ${AWS::StackName}-DeploymentBucketName
+
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !GetAtt ContactPageStack.Outputs.ApiEndpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiEndpoint
+
   CloudFrontDistributionDomainName:
     Description: CloudFront Distribution Domain Name
-    Value: !GetAtt StaticWebsiteStack.Outputs.CloudFrontDistributionDomainName
+    Value: !GetAtt ContactPageStack.Outputs.CloudFrontDistributionDomainName
     Export:
       Name: !Sub ${AWS::StackName}-CloudFrontDomainName
       
