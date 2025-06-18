@@ -11,6 +11,14 @@ Parameters:
       - prod
     Description: The deployment environment
   
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: ID of the VPC where Lambda function will run
+  
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs where Lambda function will run
+  
   CloudFrontDistributionId:
     Type: String
     Description: ID of the CloudFront distribution
@@ -69,6 +77,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
         - PolicyName: ContactProcessorPolicy
           PolicyDocument:
@@ -94,6 +103,10 @@ Resources:
       Runtime: nodejs14.x
       Timeout: 30
       MemorySize: 256
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds: !Ref SubnetIds
       Environment:
         Variables:
           CONTACTS_TABLE: !Ref ContactsTable
@@ -103,6 +116,21 @@ Resources:
         S3Bucket: !Ref DeploymentBucket
         S3Key: !Sub ${Environment}/lambda/contact-processor.zip
       Tags:
+        - Key: Environment
+          Value: !Ref Environment
+          
+  # Security Group for Lambda
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Contact Processor Lambda function
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-lambda-sg
         - Key: Environment
           Value: !Ref Environment
 
