@@ -118,38 +118,11 @@ def submit_contact_handler(event):
             'createdAt': datetime.now().isoformat()
         }
         
-        # Get table reference with timing
-        start_time = time.time()
-        logger.info("Getting DynamoDB table reference")
-        table = dynamodb.Table(CONTACTS_TABLE)
-        logger.info(f"Got table reference in {time.time() - start_time:.2f}s")
-        
-        # Try using the low-level client instead if the resource API is timing out
+        table = dynamodb.Table(CONTACTS_TABLE)        
         try:
-            logger.info(f"Saving contact to DynamoDB: {json.dumps(contact_item)}")
-            start_time = time.time()
-            
-            # First try with resource API
-            try:
-                response = table.put_item(Item=contact_item)
-                logger.info(f"DynamoDB put_item response: {json.dumps(response)}")
-                logger.info(f"Contact saved successfully in {time.time() - start_time:.2f}s")
-            except Exception as resource_error:
-                # If resource API fails, try with client API
-                logger.warning(f"Resource API failed: {str(resource_error)}, trying client API")
-                client = boto3.client('dynamodb', config=boto_config)
-                
-                # Convert to DynamoDB format
-                from boto3.dynamodb.types import TypeSerializer
-                serializer = TypeSerializer()
-                db_item = {k: serializer.serialize(v) for k, v in contact_item.items()}
-                
-                response = client.put_item(
-                    TableName=CONTACTS_TABLE,
-                    Item=db_item
-                )
-                logger.info(f"DynamoDB client put_item response: {json.dumps(response)}")
-                logger.info(f"Contact saved with client API in {time.time() - start_time:.2f}s")
+            logger.info(f"Saving contact to DynamoDB: {json.dumps(contact_item)}")            
+            response = table.put_item(Item=contact_item)
+            logger.info(f"DynamoDB put_item response: {json.dumps(response)}")
         except Exception as db_error:
             logger.error(f"Error in DynamoDB operations: {str(db_error)}", exc_info=True)
             raise
@@ -176,37 +149,9 @@ def submit_contact_handler(event):
             'body': json.dumps({'error': f'Failed to save contact information: {str(e)}'})
         }
 
-def check_network_connectivity():
-    """Check network connectivity to AWS services."""
-    try:
-        # Check if we can reach the DynamoDB endpoint
-        client = boto3.client('dynamodb', config=boto_config)
-        response = client.list_tables(Limit=1)
-        logger.info(f"DynamoDB connectivity check successful: {json.dumps(response)}")
-        return True
-    except Exception as e:
-        logger.error(f"DynamoDB connectivity check failed: {str(e)}", exc_info=True)
-        return False
-
 def lambda_handler(event, context):
     """Lambda handler receives the request from the html page and process the request."""
     logger.info(f"Received event: {json.dumps(event)}")
-    
-    # Log Lambda context information
-    logger.info(f"Function name: {context.function_name}")
-    logger.info(f"Remaining time: {context.get_remaining_time_in_millis()}ms")
-    
-    # Check VPC configuration
-    try:
-        import socket
-        # Try to resolve dynamodb endpoint
-        socket.gethostbyname('dynamodb.us-east-1.amazonaws.com')
-        logger.info("DNS resolution for DynamoDB endpoint successful")
-    except Exception as e:
-        logger.error(f"DNS resolution failed: {str(e)}", exc_info=True)
-    
-    # Check network connectivity
-    check_network_connectivity()
     
     path = event.get('path', '')
     

@@ -40,9 +40,18 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
+        - AttributeName: email
+          AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -93,7 +102,11 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
-                Resource: !GetAtt ContactsTable.Arn
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                Resource: 
+                  - !GetAtt ContactsTable.Arn
+                  - !Sub "${ContactsTable.Arn}/index/*"
               - Effect: Allow
                 Action:
                   - s3:PutObject
@@ -189,6 +202,13 @@ Resources:
       RestApiId: !Ref ContactApi
       ParentId: !Ref ApiResource
       PathPart: submit-contact
+      
+  SearchByEmailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ContactApi
+      ParentId: !Ref ApiResource
+      PathPart: search-by-email
 
   # API Gateway Methods
   UploadUrlMethod:
@@ -214,6 +234,18 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ContactProcessorFunction.Arn}/invocations
+        
+  SearchByEmailMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ContactApi
+      ResourceId: !Ref SearchByEmailResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ContactProcessorFunction.Arn}/invocations
 
   # API Gateway Deployment
   ApiDeployment:
@@ -221,6 +253,7 @@ Resources:
     DependsOn:
       - UploadUrlMethod
       - SubmitContactMethod
+      - SearchByEmailMethod
     Properties:
       RestApiId: !Ref ContactApi
       StageName: !Ref Environment
