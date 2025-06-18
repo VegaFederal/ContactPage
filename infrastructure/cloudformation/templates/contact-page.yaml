@@ -19,9 +19,7 @@ Parameters:
     Type: List<AWS::EC2::Subnet::Id>
     Description: List of subnet IDs where Lambda function will run
   
-  CloudFrontDistributionId:
-    Type: String
-    Description: ID of the CloudFront distribution
+
 
 Resources:
   # DynamoDB Table for Contact Information

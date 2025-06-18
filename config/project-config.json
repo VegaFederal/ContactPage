@@ -1,0 +1,11 @@
+{
+  "projectName": "contact-page",
+  "description": "Contact page demo that demonstrates DynamoDB, Lambda, Resume Storage.",
+  "infraType": "cloudformation",
+  "applicationType": "serverless",
+  "awsRegion": "us-east-1",
+  "vpcId": "vpc-03de7ad5a4c7c1822",
+  "subnetIds": "subnet-0f82bfe94c8055036",
+  "githubRepo": "https://github.com/VegaFederal/ContactPage"
+
+}
