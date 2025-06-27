@@ -152,8 +152,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
           
-# DynamoDB VPC Endpoint should be created in shared development environment infrastructure
-
   # API Gateway for Lambda Integration
   ContactApi:
     Type: AWS::ApiGateway::RestApi
