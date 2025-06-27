@@ -20,11 +20,7 @@ Parameters:
     Type: List<AWS::EC2::Subnet::Id>
     Default: subnet-0f82bfe94c8055036
     Description: List of existing subnet IDs for deployment
-    
-  RouteTableId:
-    Type: String
-    Default: rtb-0bbaaa9146c12d706
-    Description: ID of the route table for the VPC endpoint
+
 
   
   TemplateBucket:
@@ -57,7 +53,7 @@ Resources:
         Environment: !Ref Environment
         VpcId: !Ref VpcId
         SubnetIds: !Join [',', !Ref SubnetIds]
-        RouteTableId: !Ref RouteTableId
+
         DeploymentBucket: !Sub contact-page-deployment-${Environment}
       Tags:
         - Key: Environment
