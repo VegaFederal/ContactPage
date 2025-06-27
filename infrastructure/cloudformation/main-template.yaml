@@ -53,7 +53,6 @@ Resources:
         Environment: !Ref Environment
         VpcId: !Ref VpcId
         SubnetIds: !Join [',', !Ref SubnetIds]
-
         DeploymentBucket: !Sub contact-page-deployment-${Environment}
       Tags:
         - Key: Environment
